@@ -1,10 +1,9 @@
 from moviepy.editor import AudioFileClip
-import pygame,time,os,re
-############################################
-from download import download
 from setting import setting as user_setting
-import gui.cache
+from download import download
 import discord_rpc.client
+import gui.cache
+import pygame,time,os,re
 
 def is_url(url: str) -> bool:
     match = re.search(gui.cache.SEARCH_PATTERN, url)

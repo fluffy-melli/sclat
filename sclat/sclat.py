@@ -1,9 +1,9 @@
 import sys,time
 from gui import gui, nogui, with_play, screen, cache
+from pypresence.exceptions import DiscordNotFound
+from setting import setting as user_setting
 import discord_rpc.client
 import locale
-from setting import setting as user_setting
-from pypresence.exceptions import DiscordNotFound
 
 args = sys.argv[1:]
 

@@ -1,23 +1,18 @@
-import chardet, cv2, time, re, os
+import chardet, cv2, time, sys, re, os
 
+sys.stdout = open(os.devnull, 'w')
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-import pygame, pygame.scrap
 from pyvidplayer2 import Video
 from dataclasses import dataclass
 from typing import Optional
-##############################################
+from gui import size, screen, cache, with_play
 from download import download, subtitles
 from setting import setting as user_setting
-from gui import size
-import gui.screen
-import gui.cache
-import gui.font
-import sockets.client
-import sockets.server
-import sockets.setting
-import sockets.user
+from sockets import setting as socket_setting
+from sockets import client, server
+import pygame, pygame.scrap
 import discord_rpc.client
-import gui.with_play
+import gui.font
 
 # Global state
 @dataclass
@@ -39,10 +34,10 @@ class VideoState:
 state = VideoState()
 
 def is_url(url: str) -> bool:
-    match = re.search(gui.cache.SEARCH_PATTERN, url)
+    match = re.search(cache.SEARCH_PATTERN, url)
     return bool(match)
 def is_playlist(url: str) -> bool:
-    match = re.search(gui.cache.PLAYLIST_SEARCH_PATTERN, url)
+    match = re.search(cache.PLAYLIST_SEARCH_PATTERN, url)
     return bool(match)
 
 def frame_to_ascii(frame, width=100):
@@ -64,12 +59,12 @@ def frame_to_ascii(frame, width=100):
     resized_image = cv2.resize(frame, (width, new_height))
     ascii_chars = []
     colors = []
-    scale = 256 / len(gui.cache.ASCII_CHARS)
+    scale = 256 / len(cache.ASCII_CHARS)
     pixels = resized_image.reshape(-1, 3)
     for pixel in pixels:
         brightness = int(pixel.mean())
         index = int(brightness / scale)
-        ascii_chars.append(gui.cache.ASCII_CHARS[index])
+        ascii_chars.append(cache.ASCII_CHARS[index])
         colors.append(tuple(pixel.astype(int)))
     ascii_image = []
     for i in range(0, len(ascii_chars), width):
@@ -98,38 +93,39 @@ def handle_key_event(key: str) -> None:
     if not key:
         return
     if key == "s":
-        gui.screen.vid.seek(gui.screen.vid.duration - gui.screen.vid.get_pos())
+        screen.vid.seek(screen.vid.duration - screen.vid.get_pos())
     elif key == "escape":
-        gui.cache.video_list = []
-        gui.screen.vid.seek(gui.screen.vid.duration - gui.screen.vid.get_pos())
+        cache.video_list = []
+        screen.vid.seek(screen.vid.duration - screen.vid.get_pos())
     elif key == "r":
-        gui.screen.vid.restart()
+        screen.vid.restart()
         state.msg_text = "Restarted"
     elif key == "p":
-        gui.screen.vid.toggle_pause()
-        state.msg_text = "Paused" if gui.screen.vid.paused else "Playing"
+        screen.vid.toggle_pause()
+        state.msg_text = "Paused" if screen.vid.paused else "Playing"
     elif key == "m":
-        gui.screen.vid.toggle_mute()
-        state.msg_text = "Muted" if gui.screen.vid.muted else "Unmuted"
+        screen.vid.toggle_mute()
+        state.msg_text = "Muted" if screen.vid.muted else "Unmuted"
     elif key == "l":
-        gui.cache.loop = not gui.cache.loop
-        state.msg_text = f"Loop: {'On' if gui.cache.loop else 'Off'}"
+        cache.loop = not cache.loop
+        state.msg_text = f"Loop: {'On' if cache.loop else 'Off'}"
     elif key in ["up", "down"]:
         volume_delta = 10 if key == "up" else -10
         if 0 <= user_setting.volume + volume_delta <= 100:
             user_setting.change_setting_data('volume',user_setting.volume + volume_delta)
-            gui.screen.vid.set_volume(user_setting.volume/100)
+            screen.vid.set_volume(user_setting.volume/100)
             state.msg_text = f"Volume: {user_setting.volume}%"
     elif key in ["right", "left"]:
         seek_amount = 15 if key == "right" else -15
-        gui.screen.vid.seek(seek_amount)
+        screen.vid.seek(seek_amount)
         state.msg_text = f"Seek: {seek_amount:+d}s"
     elif key == "f11":
         state.fullscreen = not state.fullscreen
+        state.msg_text = f"{'FullScreen' if state.fullscreen else 'BasicScreen'}"
         if not state.fullscreen:
-            gui.screen.reset((gui.screen.vid.current_size[0]*1.5, gui.screen.vid.current_size[1]*1.5+5))
+            screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5+5))
         else:
-            gui.screen.reset((state.display_width,state.display_height))
+            screen.reset((state.display_width,state.display_height))
     elif key == "a":
         toggle_ascii_mode()
         state.msg_text = "ASCII Mode" if state.ascii_mode else "Normal Mode"
@@ -148,26 +144,36 @@ def toggle_ascii_mode():
         ascii_height = int(state.ascii_width * video_height / video_width)
         window_width = state.ascii_width * state.font_size * 0.6
         window_height = int(ascii_height * state.font_size * 0.56)
-        gui.screen.win = pygame.display.set_mode((int(window_width), int(window_height)))
+        screen.win = pygame.display.set_mode((int(window_width), int(window_height)))
         state.font = pygame.font.SysFont("Courier", state.font_size)
     else:
-        gui.screen.reset((gui.screen.vid.current_size[0]*1.5, gui.screen.vid.current_size[1]*1.5+5), vid=True)
+        screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5+5), vid=True)
     os.environ['SDL_VIDEO_CENTERED'] = '1'
 
 def draw_overlay(current_time: float):
     """Draws the overlay text on the video screen"""
-    if time.time() - state.msg_start_time <= gui.cache.MESSAGE_DISPLAY_TIME and state.msg_text:
-        text_surface = gui.screen.font.render(state.msg_text, True, (255,255,255))
+    if time.time() - state.msg_start_time <= cache.MESSAGE_DISPLAY_TIME and state.msg_text:
+        text_surface = screen.font.render(state.msg_text, True, (255,255,255))
         text_rect = text_surface.get_rect(topleft=(10, 10))
-        gui.screen.win.blit(text_surface, text_rect)
+        #screen.win.blit(text_surface, text_rect)
+        padding = 2
+        rect_width = text_rect.width + padding * 2
+        rect_height = text_rect.height + padding * 2
+        rect_x = text_rect.x - padding
+        rect_y = text_rect.y - padding
+        rectangle_surface = pygame.Surface((rect_width, rect_height))
+        rectangle_surface.fill((0, 0, 0))
+        rectangle_surface.set_alpha(128)
+        screen.win.blit(rectangle_surface, (rect_x, rect_y))
+        screen.win.blit(text_surface, text_rect)
 
-    total_length = gui.screen.vid.duration
-    window_width = gui.screen.win.get_size()[0]
-    window_height = gui.screen.win.get_size()[1]
+    total_length = screen.vid.duration
+    window_width = screen.win.get_size()[0]
+    window_height = screen.win.get_size()[1]
     
-    pygame.draw.rect(gui.screen.win, (100, 100, 100), 
+    pygame.draw.rect(screen.win, (100, 100, 100), 
                     (0, window_height - 5, window_width, 5))
-    pygame.draw.rect(gui.screen.win, (255, 0, 0), 
+    pygame.draw.rect(screen.win, (255, 0, 0), 
                     (0, window_height - 5, (current_time / total_length) * window_width, 5))
 
 def try_play_video(url: str, max_retries: int = 10) -> None:
@@ -203,7 +209,7 @@ def hex_to_rgb(hex_color):
 def render_subtitles(subtitles):
     current_subtitle = []
     for subtitle in subtitles:
-        if subtitle['start_time'] <= gui.screen.vid.get_pos() <= subtitle['end_time']:
+        if subtitle['start_time'] <= screen.vid.get_pos() <= subtitle['end_time']:
             current_subtitle.append(subtitle)
         else:
             pass
@@ -220,7 +226,7 @@ def render_subtitles(subtitles):
             i = 0
             for line in (content['text'].split('\n'))[::-1]:
                 text_surface = font.render(line, True, (236,82,82))
-                text_rect = text_surface.get_rect(center=(gui.screen.win.get_width() * (int(content['position']) / 100), gui.screen.win.get_height() * (int(content['line']) / 100) - (i * (content['size'] + 11))))
+                text_rect = text_surface.get_rect(center=(screen.win.get_width() * (int(content['position']) / 100), screen.win.get_height() * (int(content['line']) / 100) - (i * (content['size'] + 11))))
                 padding = 2
                 rect_width = text_rect.width + padding * 2
                 rect_height = text_rect.height + padding * 2
@@ -229,12 +235,12 @@ def render_subtitles(subtitles):
                 rectangle_surface = pygame.Surface((rect_width, rect_height))
                 rectangle_surface.fill((0, 0, 0))
                 rectangle_surface.set_alpha(128)
-                gui.screen.win.blit(rectangle_surface, (rect_x, rect_y))
-                gui.screen.win.blit(text_surface, text_rect)
+                screen.win.blit(rectangle_surface, (rect_x, rect_y))
+                screen.win.blit(text_surface, text_rect)
                 i += 1
         else:
             text_surface = font.render(content['text'], True, (236,82,82))
-            text_rect = text_surface.get_rect(center=(gui.screen.win.get_width() * (int(content['position']) / 100), gui.screen.win.get_height() * (int(content['line']) / 100)))
+            text_rect = text_surface.get_rect(center=(screen.win.get_width() * (int(content['position']) / 100), screen.win.get_height() * (int(content['line']) / 100)))
             padding = 2
             rect_width = text_rect.width + padding * 2
             rect_height = text_rect.height + padding * 2
@@ -243,8 +249,8 @@ def render_subtitles(subtitles):
             rectangle_surface = pygame.Surface((rect_width, rect_height))
             rectangle_surface.fill((0, 0, 0))
             rectangle_surface.set_alpha(128)
-            gui.screen.win.blit(rectangle_surface, (rect_x, rect_y))
-            gui.screen.win.blit(text_surface, text_rect)
+            screen.win.blit(rectangle_surface, (rect_x, rect_y))
+            screen.win.blit(text_surface, text_rect)
     #pygame.display.flip()
 
 def run(url: str, seek = 0):
@@ -257,68 +263,68 @@ def run(url: str, seek = 0):
         except Exception as e:
             sub = None
             vtt = None
-    gui.screen.vid = Video(fn)
-    gui.screen.reset((gui.screen.vid.current_size[0]*1.5, gui.screen.vid.current_size[1]*1.5 + 5), vid=True)
-    pygame.display.set_caption(gui.screen.vid.name)
-    gui.screen.vid.set_volume(user_setting.volume / 100)
-    gui.screen.vid.seek(seek)
+    screen.vid = Video(fn)
+    screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5 + 5), vid=True)
+    pygame.display.set_caption(screen.vid.name)
+    screen.vid.set_volume(user_setting.volume / 100)
+    screen.vid.seek(seek)
     global state
     state.font = pygame.font.SysFont("Courier", state.font_size)
     state.cap = cv2.VideoCapture(fn)
     state.msg_start_time = 0 
     state.msg_text = "" 
     if user_setting.discord_RPC:
-        discord_rpc.client.update(time.time(),gui.screen.vid.name)
-    if gui.with_play.server:
-        sockets.server.seek = 0
-        sockets.server.playurl = url
-        #sockets.server.broadcast_message({"type":"play-info","playurl": url,"seek": 0})
-    while gui.screen.vid.active:
+        discord_rpc.client.update(time.time(),screen.vid.name)
+    if with_play.server:
+        server.seek = 0
+        server.playurl = url
+        #server.broadcast_message({"type":"play-info","playurl": url,"seek": 0})
+    while screen.vid.active:
         key = None
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                gui.screen.vid.stop()
+                screen.vid.stop()
             elif event.type == pygame.KEYDOWN:
                 key = pygame.key.name(event.key)
                 handle_key_event(key)
         
-        if gui.screen.load == 2:
-            current_time = gui.screen.vid.get_pos()
-            total_length = gui.screen.vid.duration
+        if screen.load == 2:
+            current_time = screen.vid.get_pos()
+            total_length = screen.vid.duration
             fps = state.cap.get(cv2.CAP_PROP_FPS)
             frame_number = int(current_time * fps)
             state.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
             ret, frame = state.cap.read()
             if total_length - current_time <= 0.1:
-                if gui.cache.loop:
-                    gui.screen.vid.restart()
+                if cache.loop:
+                    screen.vid.restart()
             if not ret:
                 break
             if state.ascii_mode and state.cap:
                 if ret:
-                    gui.screen.vid.draw(gui.screen.win, (0, 0))
+                    screen.vid.draw(screen.win, (0, 0))
                     ascii_frame = frame_to_ascii(frame, width=state.ascii_width)
-                    gui.screen.win.fill((0, 0, 0))
+                    screen.win.fill((0, 0, 0))
                     for i, (line_chars, line_colors) in enumerate(ascii_frame):
                         x = 0
                         for char, color in zip(line_chars, line_colors):
                             color = (color[2], color[1], color[0])
                             text_surface = state.font.render(char, False, color)
-                            gui.screen.win.blit(text_surface, (x, i * state.font_size))
+                            screen.win.blit(text_surface, (x, i * state.font_size))
                             x += state.font_size * 0.6
                     draw_overlay(current_time)
-                    if gui.with_play.server:
-                        sockets.server.seek = current_time
-                    pygame.display.set_caption(f"[{current_time:.2f}s / {total_length:.2f}s] {gui.screen.vid.name}")
+                    if with_play.server:
+                        server.seek = current_time
+                    pygame.display.set_caption(f"[{current_time:.2f}s / {total_length:.2f}s] {screen.vid.name}")
             else:
-                gui.screen.vid.draw(gui.screen.win, (0, 0))
+                screen.vid.draw(screen.win, (0, 0))
                 frame = size.sizeup(frame, pygame.display.get_window_size())
                 frame_surface = pygame.surfarray.make_surface(frame)
-                gui.screen.win.blit(frame_surface, (0, 0))
+                screen.win.blit(frame_surface, (0, 0))
                 draw_overlay(current_time)
-                if gui.with_play.server:
-                    sockets.server.seek = current_time
-                pygame.display.set_caption(f"[{current_time:.2f}s / {total_length:.2f}s] {gui.screen.vid.name}")
+                if with_play.server:
+                    server.seek = current_time
+                pygame.display.set_caption(f"[{current_time:.2f}s / {total_length:.2f}s] {screen.vid.name}")
         if sub:
             render_subtitles(sub)
         pygame.display.update()
@@ -326,13 +332,13 @@ def run(url: str, seek = 0):
     if state.cap:
         state.cap.release()
         state.cap = None
-    gui.screen.vid.close()
+    screen.vid.close()
     os.environ['SDL_VIDEO_CENTERED'] = '1'
-    gui.cache.video_list.remove(gui.cache.video_list[0])
+    cache.video_list.remove(cache.video_list[0])
     if state.fullscreen:
-        gui.screen.reset((state.display_width,state.display_height))
-    if len(gui.cache.video_list) == 0:
-        gui.screen.reset((state.search_width, state.search_height))
+        screen.reset((state.display_width,state.display_height))
+    if len(cache.video_list) == 0:
+        screen.reset((state.search_width, state.search_height))
     download.clear(fns)
     pygame.display.update()
     pygame.display.set_caption("Sclat Video Player")
@@ -346,11 +352,11 @@ def wait(once):
     state.search_height = int(state.search_width * (9 / 16))
     os.environ['SDL_VIDEO_CENTERED'] = '1'
     if state.fullscreen:
-        gui.screen.reset((state.display_width,state.display_height))
-    elif gui.screen.vid is None:
-        gui.screen.reset((state.search_width, state.search_height))
+        screen.reset((state.display_width,state.display_height))
+    elif screen.vid is None:
+        screen.reset((state.search_width, state.search_height))
     else:
-        gui.screen.reset((gui.screen.vid.current_size[0]*1.5, gui.screen.vid.current_size[1]*1.5 + 5), vid=True)
+        screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5 + 5), vid=True)
     pygame.scrap.init()
     icon = pygame.image.load("./asset/sclatIcon.png")
     pygame.display.set_icon(icon)
@@ -358,19 +364,19 @@ def wait(once):
     pygame.key.set_text_input_rect(pygame.Rect(0, 0, 0, 0))
     if user_setting.discord_RPC:
         discord_rpc.client.update(time.time(),"waiting...")
-    if gui.with_play.server:
-        sockets.server.seek = 0
-        sockets.server.playurl = ''
-        #sockets.server.broadcast_message({"type":"play-wait"})
+    if with_play.server:
+        server.seek = 0
+        server.playurl = ''
+        #server.broadcast_message({"type":"play-wait"})
     last_playinfo_time = time.time()
-    if sockets.setting.last_server != "":
-        gui.with_play.c_server_ip = sockets.setting.last_server
+    if socket_setting.last_server != "":
+        with_play.c_server_ip = socket_setting.last_server
     while True:
-        gui.screen.win.fill((0, 0, 0))
-        if gui.with_play.client:
-            if sockets.client.play:
+        screen.win.fill((0, 0, 0))
+        if with_play.client:
+            if client.play:
                 pygame.display.update()
-                run(sockets.client.url, sockets.client.seek)
+                run(client.url, client.seek)
             else:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
@@ -384,10 +390,10 @@ def wait(once):
                             pygame.quit()
                             exit(0)
                         elif event.key == pygame.K_BACKSPACE:
-                            gui.with_play.c_server_ip = gui.with_play.c_server_ip[:-1]
+                            with_play.c_server_ip = with_play.c_server_ip[:-1]
                         elif event.key == pygame.K_RETURN:
-                            sockets.setting.change_setting_data("last-server", gui.with_play.c_server_ip)
-                            gui.with_play.Start_Client(gui.with_play.c_server_ip)
+                            socket_setting.change_setting_data("last-server", with_play.c_server_ip)
+                            with_play.Start_Client(with_play.c_server_ip)
                         elif event.key == pygame.K_v and (pygame.key.get_mods() & pygame.KMOD_CTRL):
                             if pygame.scrap.get_init():
                                 copied_text = pygame.scrap.get(pygame.SCRAP_TEXT)
@@ -404,20 +410,20 @@ def wait(once):
                 if gui.with_play.c_server_on:
                     current_time = time.time()
                     if current_time - last_playinfo_time >= 1:
-                        sockets.client.playinfo()
+                        client.playinfo()
                         last_playinfo_time = current_time
-                    text_surface = gui.screen.font.render("Waiting for the server to play the song", True, (255,255,255))
-                    text_rect = text_surface.get_rect(center=(gui.screen.win.get_size()[0]/2,gui.screen.win.get_size()[1]/2)) 
-                    gui.screen.win.blit(text_surface, text_rect)
+                    text_surface = screen.font.render("Waiting for the server to play the song", True, (255,255,255))
+                    text_rect = text_surface.get_rect(center=(screen.win.get_size()[0]/2,screen.win.get_size()[1]/2)) 
+                    screen.win.blit(text_surface, text_rect)
                     pygame.display.update()
                 else:
-                    text_surface = gui.screen.font.render(f"Server IP: {gui.with_play.c_server_ip}", True, (255,255,255))
-                    text_rect = text_surface.get_rect(center=(gui.screen.win.get_size()[0]/2,gui.screen.win.get_size()[1]/2)) 
-                    gui.screen.win.blit(text_surface, text_rect)
+                    text_surface = screen.font.render(f"Server IP: {gui.with_play.c_server_ip}", True, (255,255,255))
+                    text_rect = text_surface.get_rect(center=(screen.win.get_size()[0]/2,screen.win.get_size()[1]/2)) 
+                    screen.win.blit(text_surface, text_rect)
                     pygame.display.update()
         else:
             key = None
-            if len(gui.cache.video_list) == 0:
+            if len(cache.video_list) == 0:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         pygame.display.quit()
@@ -447,41 +453,41 @@ def wait(once):
                     elif event.type == pygame.TEXTINPUT:
                         state.search += event.text
                 if gui.with_play.server:
-                    sockets.server.seek = 0
-                    sockets.server.playurl = ''
+                    server.seek = 0
+                    server.playurl = ''
                 if not key:
-                    text_surface = gui.screen.font.render(f"search video : {state.search}", True, (255,255,255))
-                    text_rect = text_surface.get_rect(center=(gui.screen.win.get_size()[0]/2,gui.screen.win.get_size()[1]/2)) 
-                    gui.screen.win.blit(text_surface, text_rect)
+                    text_surface = screen.font.render(f"search video : {state.search}", True, (255,255,255))
+                    text_rect = text_surface.get_rect(center=(screen.win.get_size()[0]/2,screen.win.get_size()[1]/2)) 
+                    screen.win.blit(text_surface, text_rect)
                     pygame.display.update()
                     continue
                 elif key == "backspace":
                     state.search = state.search[0:len(state.search)-1]
                 elif len(key) == 1:
                     state.search = state.search + key
-                text_surface = gui.screen.font.render(f"search video : {state.search}", True, (255,255,255))
-                text_rect = text_surface.get_rect(center=(gui.screen.win.get_size()[0]/2,gui.screen.win.get_size()[1]/2)) 
-                gui.screen.win.blit(text_surface, text_rect)
+                text_surface = screen.font.render(f"search video : {state.search}", True, (255,255,255))
+                text_rect = text_surface.get_rect(center=(screen.win.get_size()[0]/2,screen.win.get_size()[1]/2)) 
+                screen.win.blit(text_surface, text_rect)
                 pygame.display.update()
                 if key == "enter" or key == "return":
                     if is_playlist(state.search):
                         video_urls = download.get_playlist_video(state.search)
-                        gui.cache.video_list.extend(video_urls)
+                        cache.video_list.extend(video_urls)
                         state.search = ""
                     elif is_url(state.search):
                         a = state.search
-                        gui.cache.video_list.append(a)
+                        cache.video_list.append(a)
                         state.search = ""
                     else:
-                        gui.screen.win.fill((0,0,0))
-                        text_surface = gui.screen.font.render(f"Searching YouTube videos...", True, (255,255,255))
-                        text_rect = text_surface.get_rect(center=(gui.screen.win.get_size()[0]/2,gui.screen.win.get_size()[1]/2)) 
-                        gui.screen.win.blit(text_surface, text_rect)
+                        screen.win.fill((0,0,0))
+                        text_surface = screen.font.render(f"Searching YouTube videos...", True, (255,255,255))
+                        text_rect = text_surface.get_rect(center=(screen.win.get_size()[0]/2,screen.win.get_size()[1]/2)) 
+                        screen.win.blit(text_surface, text_rect)
                         pygame.display.flip()
                         load = False
                         choice = 0
                         videos = download.search(state.search,10)[:5]
-                        gui.screen.win.fill((0,0,0))
+                        screen.win.fill((0,0,0))
                         pygame.display.flip()
                         while True:
                             key = ""
@@ -503,47 +509,47 @@ def wait(once):
                                 else:
                                     choice = 0
                             elif key == "escape":
-                                gui.cache.video_list = []
+                                cache.video_list = []
                                 break
-                            gui.screen.win.fill((0,0,0))
+                            screen.win.fill((0,0,0))
                             for i, video in enumerate(videos):
                                 if i == choice:
-                                    text_surface = gui.screen.font.render(video.title, True, (0,0,255))
+                                    text_surface = screen.font.render(video.title, True, (0,0,255))
                                 else:
-                                    text_surface = gui.screen.font.render(video.title, True, (255,255,255))
+                                    text_surface = screen.font.render(video.title, True, (255,255,255))
                                 text_rect = text_surface.get_rect()
-                                text_rect.centerx = gui.screen.win.get_size()[0] // 2
+                                text_rect.centerx = screen.win.get_size()[0] // 2
                                 text_rect.y = i * 30 + 50
-                                gui.screen.win.blit(text_surface, text_rect)
+                                screen.win.blit(text_surface, text_rect)
                                 if not load:
                                     pygame.display.flip()
                             load = True
                             pygame.display.flip()
                             if key == "enter" or key == "return":
-                                gui.cache.video_list.append(f"https://www.youtube.com/watch?v={videos[choice].watch_url}")
+                                cache.video_list.append(f"https://www.youtube.com/watch?v={videos[choice].watch_url}")
                                 break
                 trys = 0
-                while len(gui.cache.video_list) != 0:
+                while len(cache.video_list) != 0:
                     try:
-                        run(gui.cache.video_list[0])
+                        run(cache.video_list[0])
                         if once:
                             break
                     except Exception as e:
-                        if gui.screen.vid == None:
-                            gui.screen.reset((state.search_width, state.search_height))
+                        if screen.vid == None:
+                            screen.reset((state.search_width, state.search_height))
                         else:
-                            gui.screen.reset((gui.screen.vid.current_size[0]*1.5,gui.screen.vid.current_size[1]*1.5+5), vid=True)
+                            screen.reset((screen.vid.current_size[0]*1.5,screen.vid.current_size[1]*1.5+5), vid=True)
                         if trys >= 10:
                             print("fail")
-                            gui.cache.video_list = []
+                            cache.video_list = []
                             break
                         print(f"An error occurred during playback. Trying again... ({trys}/10) > \n{e}")
-                        text_surface = gui.screen.font.render(f"An error occurred during playback. Trying again... ({trys}/10) >", True, (255,255,255))
-                        text_surface_2 = gui.screen.font.render(f"{e}", True, (255,255,255))
-                        text_rect = text_surface.get_rect(center=(gui.screen.win.get_size()[0]/2,gui.screen.win.get_size()[1]/2)) 
-                        text_rect_2 = text_surface_2.get_rect(center=(gui.screen.win.get_size()[0]/2,gui.screen.win.get_size()[1]/2+30)) 
-                        gui.screen.win.blit(text_surface, text_rect)
-                        gui.screen.win.blit(text_surface_2, text_rect_2)
+                        text_surface = screen.font.render(f"An error occurred during playback. Trying again... ({trys}/10) >", True, (255,255,255))
+                        text_surface_2 = screen.font.render(f"{e}", True, (255,255,255))
+                        text_rect = text_surface.get_rect(center=(screen.win.get_size()[0]/2,screen.win.get_size()[1]/2)) 
+                        text_rect_2 = text_surface_2.get_rect(center=(screen.win.get_size()[0]/2,screen.win.get_size()[1]/2+30)) 
+                        screen.win.blit(text_surface, text_rect)
+                        screen.win.blit(text_surface_2, text_rect_2)
                         pygame.display.flip()
                         time.sleep(0.5)
                         trys += 1

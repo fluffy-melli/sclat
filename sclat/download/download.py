@@ -2,7 +2,7 @@ import os,pygame,shutil,yt_dlp
 from pytubefix import YouTube,Search
 from pytubefix.cli import on_progress
 ####################################
-from setting import setting as user_setting
+from setting import setting
 import gui.screen
 
 def convert_size(bytes):
@@ -72,22 +72,22 @@ def video_info(url:str):
     return YouTube(url).streaming_data
 
 def install(url:str):
-    os.makedirs(user_setting.file_save_dir, exist_ok=True)
+    os.makedirs(setting.file_save_dir, exist_ok=True)
     yt = YouTube(url, on_progress_callback = progress_function, on_complete_callback=after)
-    fns = f"{user_setting.file_save_dir}/{yt.length}/"
+    fns = f"{setting.file_save_dir}/{yt.length}/"
     os.makedirs(fns, exist_ok=True)
     if not os.path.exists(fns):
         os.makedirs(fns)
     fn = f"{fns}/{yt.title}.mp4"
     yt = yt.streams.filter(progressive=True, file_extension='mp4').get_highest_resolution()
     yt.download(filename=fn)
-    sr = install_srt(url, fns, yt.title, user_setting.SubTitle)
+    sr = install_srt(url, fns, yt.title, setting.SubTitle)
     return fns, fn, sr
 
 def install_nogui(url:str):
-    os.makedirs(user_setting.file_save_dir, exist_ok=True)
+    os.makedirs(setting.file_save_dir, exist_ok=True)
     yt = YouTube(url, on_progress_callback=on_progress)
-    fn = f"{user_setting.file_save_dir}/{yt.title}"
+    fn = f"{setting.file_save_dir}/{yt.title}"
     audio = yt.streams.filter(only_audio=True).first()
     audio.download(filename=fn+".mp3")
     return fn

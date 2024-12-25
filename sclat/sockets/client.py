@@ -1,5 +1,5 @@
-import socket, json, time
 from gui import with_play
+import socket, json, time
 
 client = None
 play = False

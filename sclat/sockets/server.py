@@ -1,7 +1,5 @@
 from sockets import setting, user
-import socket
-import threading
-import json
+import threading, socket, json
 
 playurl = ''
 seek = 0
