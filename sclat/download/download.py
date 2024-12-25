@@ -1,8 +1,9 @@
-import os,pygame,shutil,yt_dlp
+import os,pygame,shutil,yt_dlp,time
 from pytubefix import YouTube,Search
 from pytubefix.cli import on_progress
 ####################################
 from setting import setting
+import discord_rpc.client
 import gui.screen
 
 def convert_size(bytes):
@@ -15,7 +16,7 @@ def progress_function(stream, chunk, bytes_remaining):
     total_size = stream.filesize
     bytes_downloaded = total_size - bytes_remaining
     percentage = (bytes_downloaded / total_size) * 100
-    on_progress(stream, chunk, bytes_remaining)
+    #on_progress(stream, chunk, bytes_remaining)
     gui.screen.load = 1
     
     width = stream.width if stream.width else 800
@@ -74,6 +75,9 @@ def video_info(url:str):
 def install(url:str):
     os.makedirs(setting.file_save_dir, exist_ok=True)
     yt = YouTube(url, on_progress_callback = progress_function, on_complete_callback=after)
+    yt_url = yt.watch_url
+    if setting.discord_RPC:
+        discord_rpc.client.update(time.time(), yt.title, yt_url, yt.author)
     fns = f"{setting.file_save_dir}/{yt.length}/"
     os.makedirs(fns, exist_ok=True)
     if not os.path.exists(fns):
@@ -81,7 +85,7 @@ def install(url:str):
     fn = f"{fns}/{yt.title}.mp4"
     yt = yt.streams.filter(progressive=True, file_extension='mp4').get_highest_resolution()
     yt.download(filename=fn)
-    sr = install_srt(url, fns, yt.title, setting.SubTitle)
+    sr = install_srt(yt_url, fns, yt.title, setting.SubTitle)
     return fns, fn, sr
 
 def install_nogui(url:str):

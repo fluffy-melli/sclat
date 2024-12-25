@@ -273,8 +273,8 @@ def run(url: str, seek = 0):
     state.cap = cv2.VideoCapture(fn)
     state.msg_start_time = 0 
     state.msg_text = "" 
-    if user_setting.discord_RPC:
-        discord_rpc.client.update(time.time(),screen.vid.name)
+    #if user_setting.discord_RPC:
+        #discord_rpc.client.update(time.time(), screen.vid.name, url)
     if with_play.server:
         server.seek = 0
         server.playurl = url
@@ -362,8 +362,8 @@ def wait(once):
     pygame.display.set_icon(icon)
     pygame.display.set_caption("Sclat Video Player")
     pygame.key.set_text_input_rect(pygame.Rect(0, 0, 0, 0))
-    if user_setting.discord_RPC:
-        discord_rpc.client.update(time.time(),"waiting...")
+    #if user_setting.discord_RPC:
+        #discord_rpc.client.update(time.time(),"waiting...","")
     if with_play.server:
         server.seek = 0
         server.playurl = ''

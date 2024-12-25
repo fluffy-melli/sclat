@@ -30,7 +30,7 @@ for arg in args:
 try:
     if user_setting.discord_RPC:
         discord_rpc.client.RPC.connect()
-        discord_rpc.client.update(time.time(),"waiting...")
+        #discord_rpc.client.update(time.time(),"waiting...")
 
     while True:
         screen.load = 0
