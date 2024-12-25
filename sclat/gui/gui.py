@@ -1,6 +1,6 @@
 import chardet, cv2, time, sys, re, os
 
-sys.stdout = open(os.devnull, 'w')
+#sys.stdout = open(os.devnull, 'w')
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 from pyvidplayer2 import Video
 from dataclasses import dataclass

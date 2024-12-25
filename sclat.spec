@@ -4,10 +4,6 @@ a = Analysis(
     ['sclat\\sclat.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        ('asset/*', 'asset'),
-        ('setting/*', 'setting')
-    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -32,7 +28,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

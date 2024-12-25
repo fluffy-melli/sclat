@@ -13,4 +13,5 @@ echo "install modules..."
 pip install -r requirements.txt
 echo "pyinstaller start..."
 pyinstaller ./sclat.spec
+pyinstaller ./update.spec
 deactivate
