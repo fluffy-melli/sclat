@@ -22,4 +22,5 @@ venv/
 *.log
 src/down/storage/
 src/storage/
+asset/storage/
 *.sqlite3
