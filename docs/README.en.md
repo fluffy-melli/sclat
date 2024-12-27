@@ -3,12 +3,12 @@
 Python-based YouTube video player with ASCII art functionality.
 
 <p align="center">
-    <img src="./asset/sclatLogo.png" width="248" alt="Sclat Logo">
+    <img src="../asset/sclatLogo.png" width="248" alt="Sclat Logo">
 </p>
 
 ## 🌐 언어 | Language
 
-[한국어](README.md) | [English](./docs/README.en.md)
+[한국어](README.md) | [English](../docs/README.en.md)
 
 ## ⚙️ Requirements
 
@@ -128,7 +128,8 @@ start.sh --with-play-server
 
 1. Open the `setting/setting.json` file in the Sclat installation folder.
 2. Change `"Subtitle-Lang": "~"` value to your desired language:
--  At this time, if you enter `none`, the subtitle function will be turned off.
+
+-   At this time, if you enter `none`, the subtitle function will be turned off.
 
     ```json
     {
@@ -137,13 +138,12 @@ start.sh --with-play-server
     }
     ```
 
-
 ## ✨ Discord RPC
 
 Sclat supports the Discord Rich Presence feature, which automatically displays the currently playing video information in your Discord status.
 
 <p align="center">
-    <img src="./asset/discordRPC.png" width="300" alt="Discord RPC image">
+    <img src="../asset/discordRPC.png" width="300" alt="Discord RPC image">
 </p>
 
 ### How to enable Discord RPC

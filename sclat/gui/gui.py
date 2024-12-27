@@ -78,15 +78,18 @@ def handle_key_event(key: str) -> None:
     Handles key events for controlling video playback and settings.
     Parameters:
     key (str): The key pressed by the user. Supported keys are:
-        - "r": Restart the video.
-        - "p": Toggle pause/play state of the video.
-        - "m": Toggle mute/unmute state of the video.
-        - "l": Toggle loop setting.
-        - "up": Increase volume by 10%.
-        - "down": Decrease volume by 10%.
-        - "right": Seek forward by 15 seconds.
-        - "left": Seek backward by 15 seconds.
-        - "a": Toggle ASCII mode.
+        - 's': Skip to the end of the video.
+        - 'escape': Stop the video and clear the video list.
+        - 'r': Restart the video.
+        - 'p': Pause or resume the video.
+        - 'm': Mute or unmute the video.
+        - 'l': Toggle loop mode.
+        - 'up': Increase the volume.
+        - 'down': Decrease the volume.
+        - 'right': Seek forward.
+        - 'left': Seek backward.
+        - 'f11': Toggle fullscreen mode.
+        - 'a': Toggle ASCII mode.
     Returns:
     None
     """
@@ -273,8 +276,6 @@ def run(url: str, seek = 0):
     state.cap = cv2.VideoCapture(fn)
     state.msg_start_time = 0 
     state.msg_text = "" 
-    #if user_setting.discord_RPC:
-        #discord_rpc.client.update(time.time(), screen.vid.name, url)
     if with_play.server:
         server.seek = 0
         server.playurl = url
@@ -334,7 +335,11 @@ def run(url: str, seek = 0):
         state.cap = None
     screen.vid.close()
     os.environ['SDL_VIDEO_CENTERED'] = '1'
-    cache.video_list.remove(cache.video_list[0])
+    if cache.video_list and len(cache.video_list) > 0:
+        try:
+            cache.video_list.remove(cache.video_list[0])
+        except IndexError:
+            cache.video_list = []
     if state.fullscreen:
         screen.reset((state.display_width,state.display_height))
     if len(cache.video_list) == 0:
@@ -342,6 +347,8 @@ def run(url: str, seek = 0):
     download.clear(fns)
     pygame.display.update()
     pygame.display.set_caption("Sclat Video Player")
+    if user_setting.discord_RPC:
+        discord_rpc.client.update(time.time())
 
 def wait(once):
     global state
@@ -362,8 +369,8 @@ def wait(once):
     pygame.display.set_icon(icon)
     pygame.display.set_caption("Sclat Video Player")
     pygame.key.set_text_input_rect(pygame.Rect(0, 0, 0, 0))
-    #if user_setting.discord_RPC:
-        #discord_rpc.client.update(time.time(),"waiting...","")
+    if user_setting.discord_RPC:
+        discord_rpc.client.update(time.time())
     if with_play.server:
         server.seek = 0
         server.playurl = ''
