@@ -30,7 +30,6 @@ for arg in args:
 try:
     if user_setting.discord_RPC:
         discord_rpc.client.RPC.connect()
-        #discord_rpc.client.update(time.time(),"waiting...")
 
     while True:
         screen.load = 0
@@ -49,6 +48,12 @@ except DiscordNotFound:
         error_msg = "Discord is not running.\nPlease start Discord and try again,\nor set discord_RPC to false in setting.json file."
     print(error_msg)
     sys.exit(1)
+
+except KeyboardInterrupt:
+    if user_setting.discord_RPC:
+        discord_rpc.client.RPC.close()
+    print("\nShutting down...")
+    sys.exit(0)
 
 if user_setting.discord_RPC:
     discord_rpc.client.RPC.close()
