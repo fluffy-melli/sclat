@@ -8,7 +8,7 @@ Python-based YouTube video player with ASCII art functionality.
 
 ## 🌐 언어 | Language
 
-[한국어](README.md) | [English](./docs/README.en.md)
+[한국어](README.md) | [English](../docs/README.en.md)
 
 ## ⚙️ Requirements
 
