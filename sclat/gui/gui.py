@@ -1,11 +1,11 @@
-import chardet, cv2, time, sys, re, os
+import chardet, cv2, time, re, os
 
 #sys.stdout = open(os.devnull, 'w')
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 from pyvidplayer2 import Video
 from dataclasses import dataclass
 from typing import Optional
-from gui import size, screen, cache, with_play
+from gui import size, screen, gesture, cache, with_play
 from download import download, subtitles
 from setting import setting as user_setting
 from sockets import setting as socket_setting
@@ -301,6 +301,8 @@ def run(url: str, seek = 0):
                     screen.vid.restart()
             if not ret:
                 break
+            if user_setting.Gesture:
+                gesture.run(screen.vid.duration)
             if state.ascii_mode and state.cap:
                 if ret:
                     screen.vid.draw(screen.win, (0, 0))
@@ -334,6 +336,8 @@ def run(url: str, seek = 0):
         state.cap.release()
         state.cap = None
     screen.vid.close()
+    if user_setting.Gesture and user_setting.Gesture_show:
+        gesture.close()
     os.environ['SDL_VIDEO_CENTERED'] = '1'
     if cache.video_list and len(cache.video_list) > 0:
         try:

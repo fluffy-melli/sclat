@@ -1,5 +1,7 @@
 {
-    "discord_RPC": true,
+    "discord_RPC": false,
+    "Gesture-Control": true,
+    "Gesture-Control-Screen": true,
     "volume": 40,
     "file-save-dir": "./asset/storage",
     "Subtitle-Lang": "ko"
