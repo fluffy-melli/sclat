@@ -1,5 +1,4 @@
 import math, cv2, sys, numpy as np, mediapipe as mp
-from gui import screen
 from setting import setting as user_setting
 import locale
 
@@ -24,7 +23,7 @@ pause = False
 def distance(p1, p2):
     return math.dist((p1.x, p1.y), (p2.x, p2.y))
 
-def run(end):
+def run(vid):
     """
     Detect hand gestures for media control:
     - A closed fist (all fingers down) pauses the video
@@ -45,6 +44,8 @@ def run(end):
     """
     global cap, pause
     res, frame = cap.read()
+
+    end = int(vid.duration)
     
     if not res:
         print("Camera error")
@@ -77,12 +78,12 @@ def run(end):
         
         if fingers == [0, 0, 0, 0, 0]:
             hand_shape = "Stop"
-            screen.vid.pause()
+            vid.pause()
             pause = True
         elif distance(points[4], points[8]) < 0.1 and fingers[2:] == [1, 1, 1]:
             pos = int(np.interp(points[8].x * w, (50, w - 50), (1, end - 1)))
             seekpos = end - (end - pos)
-            screen.vid.seek(seekpos, False)
+            vid.seek(seekpos, False)
             hand_shape = "Move"
         
         cv2.putText(
@@ -95,8 +96,8 @@ def run(end):
             5,
         )
     
-    if pause != False and hand_shape != "Stop" and screen.vid.get_pos() != end:
-        screen.vid.resume()
+    if pause != False and hand_shape != "Stop" and vid.get_pos() != end:
+        vid.resume()
     if user_setting.Gesture_show:
         frame_height, frame_width = frame.shape[:2]
         aspect_ratio = frame_width / frame_height
