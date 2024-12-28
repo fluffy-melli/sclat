@@ -302,7 +302,7 @@ def run(url: str, seek = 0):
             if not ret:
                 break
             if user_setting.Gesture:
-                gesture.run(screen.vid.duration)
+                gesture.run(screen.vid)
             if state.ascii_mode and state.cap:
                 if ret:
                     screen.vid.draw(screen.win, (0, 0))
