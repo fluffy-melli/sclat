@@ -6,7 +6,7 @@ win, font, vid = None, None, None
 def reset(size, vid=None):
     global win, font
     pygame.init()
-    pygame.mixer.init()
+    pygame.mixer.init(frequency=22050, size=-16, channels=2)
     if vid is None:
         win = pygame.display.set_mode(size, pygame.RESIZABLE)
     else:

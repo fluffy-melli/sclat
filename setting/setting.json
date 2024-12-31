@@ -1,5 +1,6 @@
 {
-    "discord_RPC": false,
+    "FFT": false,
+    "discord_RPC": true,
     "Gesture-Control": false,
     "Gesture-Control-Screen": false,
     "STT-Contorl": true,

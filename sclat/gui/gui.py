@@ -13,9 +13,13 @@ from download import download, subtitles
 from setting import setting as user_setting
 from sockets import setting as socket_setting
 from sockets import client, server
+from fft import fft
 import pygame, pygame.scrap
 import discord_rpc.client
 import gui.font
+import numpy as np
+
+audio_data = None
 
 # Global state
 @dataclass
@@ -148,7 +152,20 @@ def try_play_video(url: str, max_retries: int = 10) -> None:
             print(f"Retry {retry + 1}/{max_retries}: {str(e)}")
             time.sleep(0.5)
 
+def FFT():
+    audio_index = int(screen.vid.get_pos() / screen.vid.duration * len(audio_data))
+    if audio_index + fft.buffer_size < len(audio_data):
+        audio_chunk = audio_data[audio_index:audio_index + fft.buffer_size]
+    else:
+        audio_chunk = audio_data[audio_index:]
+    fft_data = np.fft.fft(audio_chunk)
+    audio_index += fft.buffer_size
+    if audio_index >= len(audio_data):
+        audio_index = 0
+    fft.plot_spectrum(fft_data, audio_chunk)
+
 def run(url: str, seek = 0):
+    global audio_data
     os.environ['SDL_VIDEO_CENTERED'] = '1'
     fns, fn, vtt = download.install(url)
     sub = None
@@ -163,6 +180,7 @@ def run(url: str, seek = 0):
     pygame.display.set_caption(screen.vid.name)
     screen.vid.set_volume(user_setting.volume / 100)
     screen.vid.seek(seek)
+    audio_data = fft.extract_audio_from_video(fn)
     global state
     state.font = pygame.font.SysFont("Courier", state.font_size)
     state.cap = cv2.VideoCapture(fn)
@@ -196,8 +214,8 @@ def run(url: str, seek = 0):
                     screen.vid.restart()
             if not ret:
                 break
-            if user_setting.Gesture:
-                gesture.run(screen.vid)
+            #if user_setting.Gesture:
+            #    gesture.run(screen.vid)
             if state.ascii_mode and state.cap:
                 if ret:
                     screen.vid.draw(screen.win, (0, 0))
@@ -225,6 +243,8 @@ def run(url: str, seek = 0):
                 pygame.display.set_caption(f"[{current_time:.2f}s / {total_length:.2f}s] {screen.vid.name}")
         if sub:
             subtitle.render(sub)
+        if user_setting.FFT:
+            FFT()
         pygame.display.update()
         pygame.time.wait(16)
     if state.cap:

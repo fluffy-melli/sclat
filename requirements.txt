@@ -11,3 +11,4 @@ mediapipe == 0.10.20
 SpeechRecognition[whisper-local]==3.13.0
 pypresence == 4.3.0
 numpy == 1.26.4
+pydub == 0.25.1
