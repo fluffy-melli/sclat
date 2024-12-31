@@ -8,5 +8,6 @@ pyvidplayer2 == 0.9.24
 opencv-python == 4.5.5.64
 pyinstaller == 6.6.0
 mediapipe == 0.10.20
+SpeechRecognition[whisper-local]==3.13.0
 pypresence == 4.3.0
 numpy == 1.26.4

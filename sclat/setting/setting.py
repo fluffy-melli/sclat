@@ -6,7 +6,7 @@ def init_file():
     data['discord_RPC'] = True
     data['Gesture-Control'] = False
     data['Gesture-Control-Screen'] = False
-    # data['STT-Contorl'] = False
+    data['STT-Contorl'] = False
     data['volume'] = 10
     data['file-save-dir'] = './asset/storage'
     data['Subtitle-Lang'] = 'ko'
@@ -27,7 +27,7 @@ def reload_setting_file():
     discord_RPC = data['discord_RPC']
     Gesture = data['Gesture-Control']
     Gesture_show = data['Gesture-Control-Screen']
-    # stt = data['STT-Contorl']
+    stt = data['STT-Contorl']
     volume = data['volume']
     file_save_dir = data['file-save-dir']
     SubTitle = data['Subtitle-Lang']
@@ -35,7 +35,7 @@ def reload_setting_file():
 discord_RPC = None
 Gesture = None
 Gesture_show = None
-# stt = None
+stt = None
 volume = None
 file_save_dir = None
 SubTitle = 'ko'

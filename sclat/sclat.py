@@ -1,5 +1,7 @@
 import sys,time
-from gui import gui, nogui, with_play, screen, cache
+from gui import gui, nogui, screen, cache
+from gui.addon import with_play
+from gui.control import stt
 from pypresence.exceptions import DiscordNotFound
 from setting import setting as user_setting
 import discord_rpc.client
@@ -51,9 +53,13 @@ except DiscordNotFound:
 
 except KeyboardInterrupt:
     if user_setting.discord_RPC:
-        discord_rpc.client.RPC.close()
+        discord_rpc.client.RPC.close()    
+    if user_setting.stt:
+        stt.stop()
     print("\nShutting down...")
     sys.exit(0)
 
 if user_setting.discord_RPC:
     discord_rpc.client.RPC.close()
+if user_setting.stt:
+    stt.stop()

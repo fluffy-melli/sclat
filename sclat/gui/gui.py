@@ -5,7 +5,10 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 from pyvidplayer2 import Video
 from dataclasses import dataclass
 from typing import Optional
-from gui import size, screen, gesture, cache, with_play
+import threading
+from gui import size, screen, cache
+from addon import ascii, subtitle, with_play
+from control import gesture, stt
 from download import download, subtitles
 from setting import setting as user_setting
 from sockets import setting as socket_setting
@@ -40,39 +43,6 @@ def is_playlist(url: str) -> bool:
     match = re.search(cache.PLAYLIST_SEARCH_PATTERN, url)
     return bool(match)
 
-def frame_to_ascii(frame, width=100):
-    """
-    Converts a given image frame to an ASCII representation.
-
-    Args:
-        frame (numpy.ndarray): The input image frame to be converted.
-        width (int, optional): The width of the ASCII representation. Defaults to 100.
-
-    Returns:
-        list of tuples: A list where each tuple contains two lists:
-            - A list of ASCII characters representing a line of the image.
-            - A list of RGB color tuples corresponding to each ASCII character.
-    """
-    height, new_width = frame.shape[:2]
-    aspect_ratio = height / new_width
-    new_height = int(width * aspect_ratio * 0.55)
-    resized_image = cv2.resize(frame, (width, new_height))
-    ascii_chars = []
-    colors = []
-    scale = 256 / len(cache.ASCII_CHARS)
-    pixels = resized_image.reshape(-1, 3)
-    for pixel in pixels:
-        brightness = int(pixel.mean())
-        index = int(brightness / scale)
-        ascii_chars.append(cache.ASCII_CHARS[index])
-        colors.append(tuple(pixel.astype(int)))
-    ascii_image = []
-    for i in range(0, len(ascii_chars), width):
-        line_chars = ascii_chars[i:i+width]
-        line_colors = colors[i:i+width]
-        ascii_image.append((line_chars, line_colors))
-    return ascii_image
-
 def handle_key_event(key: str) -> None:
     """
     Handles key events for controlling video playback and settings.
@@ -95,63 +65,49 @@ def handle_key_event(key: str) -> None:
     """
     if not key:
         return
-    if key == "s":
-        screen.vid.seek(screen.vid.duration - screen.vid.get_pos())
-    elif key == "escape":
-        cache.video_list = []
-        screen.vid.seek(screen.vid.duration - screen.vid.get_pos())
-    elif key == "r":
-        screen.vid.restart()
-        state.msg_text = "Restarted"
-    elif key == "p":
-        screen.vid.toggle_pause()
-        state.msg_text = "Paused" if screen.vid.paused else "Playing"
-    elif key == "m":
-        screen.vid.toggle_mute()
-        state.msg_text = "Muted" if screen.vid.muted else "Unmuted"
-    elif key == "l":
-        cache.loop = not cache.loop
-        state.msg_text = f"Loop: {'On' if cache.loop else 'Off'}"
-    elif key in ["up", "down"]:
-        volume_delta = 10 if key == "up" else -10
-        if 0 <= user_setting.volume + volume_delta <= 100:
-            user_setting.change_setting_data('volume',user_setting.volume + volume_delta)
-            screen.vid.set_volume(user_setting.volume/100)
-            state.msg_text = f"Volume: {user_setting.volume}%"
-    elif key in ["right", "left"]:
-        seek_amount = 15 if key == "right" else -15
-        screen.vid.seek(seek_amount)
-        state.msg_text = f"Seek: {seek_amount:+d}s"
-    elif key == "f11":
-        state.fullscreen = not state.fullscreen
-        state.msg_text = f"{'FullScreen' if state.fullscreen else 'BasicScreen'}"
-        if not state.fullscreen:
-            screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5+5))
-        else:
-            screen.reset((state.display_width,state.display_height))
-    elif key == "a":
-        toggle_ascii_mode()
-        state.msg_text = "ASCII Mode" if state.ascii_mode else "Normal Mode"
-    else:
-        state.msg_text = ""
+    match key:
+        case "s":
+            screen.vid.seek(screen.vid.duration - screen.vid.get_pos())
+        case "escape":
+            cache.video_list = []
+            screen.vid.seek(screen.vid.duration - screen.vid.get_pos())
+        case "r":
+            screen.vid.restart()
+            state.msg_text = "Restarted"
+        case "p":
+            screen.vid.toggle_pause()
+            state.msg_text = "Paused" if screen.vid.paused else "Playing"
+        case "m":
+            screen.vid.toggle_mute()
+            state.msg_text = "Muted" if screen.vid.muted else "Unmuted"
+        case "l":
+            cache.loop = not cache.loop
+            state.msg_text = f"Loop: {'On' if cache.loop else 'Off'}"
+        case ["up", "down"]:
+            volume_delta = 10 if key == "up" else -10
+            if 0 <= user_setting.volume + volume_delta <= 100:
+                user_setting.change_setting_data('volume',user_setting.volume + volume_delta)
+                screen.vid.set_volume(user_setting.volume/100)
+                state.msg_text = f"Volume: {user_setting.volume}%"
+        case ["right", "left"]:
+            seek_amount = 15 if key == "right" else -15
+            screen.vid.seek(seek_amount)
+            state.msg_text = f"Seek: {seek_amount:+d}s"
+        case "f11":
+            state.fullscreen = not state.fullscreen
+            state.msg_text = f"{'FullScreen' if state.fullscreen else 'BasicScreen'}"
+            if not state.fullscreen:
+                screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5+5))
+            else:
+                screen.reset((state.display_width,state.display_height))
+        case "a":
+            ascii.toggle(state)
+            state.msg_text = "ASCII Mode" if state.ascii_mode else "Normal Mode"
+        case _:
+            state.msg_text = ""
         
     if state.msg_text:
         state.msg_start_time = time.time()
-
-def toggle_ascii_mode():
-    """Toggle between ASCII and normal video mode"""
-    state.ascii_mode = not state.ascii_mode
-    if state.ascii_mode:
-        video_width = int(state.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        video_height = int(state.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        ascii_height = int(state.ascii_width * video_height / video_width)
-        window_width = state.ascii_width * state.font_size * 0.6
-        window_height = int(ascii_height * state.font_size * 0.56)
-        screen.win = pygame.display.set_mode((int(window_width), int(window_height)))
-        state.font = pygame.font.SysFont("Courier", state.font_size)
-    else:
-        screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5+5), vid=True)
-    os.environ['SDL_VIDEO_CENTERED'] = '1'
 
 def draw_overlay(current_time: float):
     """Draws the overlay text on the video screen"""
@@ -180,16 +136,7 @@ def draw_overlay(current_time: float):
                     (0, window_height - 5, (current_time / total_length) * window_width, 5))
 
 def try_play_video(url: str, max_retries: int = 10) -> None:
-    """
-    Attempts to play a video from the given URL, retrying up to a specified number of times if an exception occurs.
-    Args:
-        url (str): The URL of the video to play.
-        max_retries (int, optional): The maximum number of retry attempts. Defaults to 10.
-    Returns:
-        None
-    Raises:
-        Exception: If the video fails to play after the maximum number of retries, an exception is raised and a message is printed.
-    """
+    """Attempts to play a video from the given URL, retrying up to a specified number of times if an exception occurs."""
     for retry in range(max_retries):
         try:
             run(url)
@@ -200,61 +147,6 @@ def try_play_video(url: str, max_retries: int = 10) -> None:
                 return
             print(f"Retry {retry + 1}/{max_retries}: {str(e)}")
             time.sleep(0.5)
-
-def hex_to_rgb(hex_color):
-    hex_color = hex_color.lstrip('#')
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-    
-    return r, g, b
-
-def render_subtitles(subtitles):
-    current_subtitle = []
-    for subtitle in subtitles:
-        if subtitle['start_time'] <= screen.vid.get_pos() <= subtitle['end_time']:
-            current_subtitle.append(subtitle)
-        else:
-            pass
-    for content in current_subtitle:
-        #if content['size'] == None:
-        #   content['size'] = 25
-        #if int(content['size']) > 25:
-        #    content['size'] = int(int(content['size']) * 0.75)
-        #else:
-        #    content['size'] = 25
-        content['size'] = 25
-        font = gui.font.get(content['size'])
-        if '\n' in content['text']:
-            i = 0
-            for line in (content['text'].split('\n'))[::-1]:
-                text_surface = font.render(line, True, (236,82,82))
-                text_rect = text_surface.get_rect(center=(screen.win.get_width() * (int(content['position']) / 100), screen.win.get_height() * (int(content['line']) / 100) - (i * (content['size'] + 11))))
-                padding = 2
-                rect_width = text_rect.width + padding * 2
-                rect_height = text_rect.height + padding * 2
-                rect_x = text_rect.x - padding
-                rect_y = text_rect.y - padding
-                rectangle_surface = pygame.Surface((rect_width, rect_height))
-                rectangle_surface.fill((0, 0, 0))
-                rectangle_surface.set_alpha(128)
-                screen.win.blit(rectangle_surface, (rect_x, rect_y))
-                screen.win.blit(text_surface, text_rect)
-                i += 1
-        else:
-            text_surface = font.render(content['text'], True, (236,82,82))
-            text_rect = text_surface.get_rect(center=(screen.win.get_width() * (int(content['position']) / 100), screen.win.get_height() * (int(content['line']) / 100)))
-            padding = 2
-            rect_width = text_rect.width + padding * 2
-            rect_height = text_rect.height + padding * 2
-            rect_x = text_rect.x - padding
-            rect_y = text_rect.y - padding
-            rectangle_surface = pygame.Surface((rect_width, rect_height))
-            rectangle_surface.fill((0, 0, 0))
-            rectangle_surface.set_alpha(128)
-            screen.win.blit(rectangle_surface, (rect_x, rect_y))
-            screen.win.blit(text_surface, text_rect)
-    #pygame.display.flip()
 
 def run(url: str, seek = 0):
     os.environ['SDL_VIDEO_CENTERED'] = '1'
@@ -276,6 +168,9 @@ def run(url: str, seek = 0):
     state.cap = cv2.VideoCapture(fn)
     state.msg_start_time = 0 
     state.msg_text = "" 
+    if user_setting.stt:
+        thread = threading.Thread(target=stt.run, args=(screen.vid,), daemon=True)
+        thread.start()
     if with_play.server:
         server.seek = 0
         server.playurl = url
@@ -306,7 +201,7 @@ def run(url: str, seek = 0):
             if state.ascii_mode and state.cap:
                 if ret:
                     screen.vid.draw(screen.win, (0, 0))
-                    ascii_frame = frame_to_ascii(frame, width=state.ascii_width)
+                    ascii_frame = ascii.frame(frame, width=state.ascii_width)
                     screen.win.fill((0, 0, 0))
                     for i, (line_chars, line_colors) in enumerate(ascii_frame):
                         x = 0
@@ -329,13 +224,15 @@ def run(url: str, seek = 0):
                     server.seek = current_time
                 pygame.display.set_caption(f"[{current_time:.2f}s / {total_length:.2f}s] {screen.vid.name}")
         if sub:
-            render_subtitles(sub)
+            subtitle.render(sub)
         pygame.display.update()
         pygame.time.wait(16)
     if state.cap:
         state.cap.release()
         state.cap = None
     screen.vid.close()
+    if user_setting.stt:
+        stt.stop()
     if user_setting.Gesture and user_setting.Gesture_show:
         gesture.close()
     os.environ['SDL_VIDEO_CENTERED'] = '1'
@@ -463,7 +360,7 @@ def wait(once):
                                     state.search += copied_text
                     elif event.type == pygame.TEXTINPUT:
                         state.search += event.text
-                if gui.with_play.server:
+                if with_play.server:
                     server.seek = 0
                     server.playurl = ''
                 if not key:
