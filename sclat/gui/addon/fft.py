@@ -10,14 +10,14 @@ channels = 2
 
 def run(audio_data):
     audio_index = int(screen.vid.get_pos() / screen.vid.duration * len(audio_data))
+    if audio_index >= len(audio_data):
+        audio_index = len(audio_data)
     if audio_index + buffer_size < len(audio_data):
         audio_chunk = audio_data[audio_index:audio_index + buffer_size]
     else:
         audio_chunk = audio_data[audio_index:]
     fft_data = np.fft.fft(audio_chunk)
     audio_index += buffer_size
-    if audio_index >= len(audio_data):
-        audio_index = 0
     plot_spectrum(fft_data, audio_chunk)
 
 def plot_spectrum(fft_data, audio_chunk):

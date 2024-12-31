@@ -7,13 +7,16 @@ from dataclasses import dataclass
 from typing import Optional
 from gui import screen, cache
 from gui.addon import ascii, subtitle, with_play, fft
-from gui.addon.control import gesture, stt
 import gui.font
 from download import download, subtitles
 from sockets import client, server
 from sockets import setting as socket_setting
 from setting import setting as user_setting
 import discord_rpc.client
+if user_setting.stt:
+    from gui.addon.control import stt
+if user_setting.Gesture or user_setting.Gesture_show:
+    from gui.addon.control import gesture
 
 # Global state
 @dataclass
@@ -82,6 +85,10 @@ def handle_key_event(key: str) -> None:
         case "l":
             cache.loop = not cache.loop
             state.msg_text = f"Loop: {'On' if cache.loop else 'Off'}"
+        case "f":
+            user_setting.FFT = not user_setting.FFT
+            user_setting.change_setting_data('FFT', user_setting.FFT)
+            state.msg_text = f"FFT: {user_setting.FFT}"
         case "up" | "down":
             volume_delta = 10 if key == "up" else -10
             if 0 <= user_setting.volume + volume_delta <= 100:

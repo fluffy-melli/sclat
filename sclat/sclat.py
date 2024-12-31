@@ -1,7 +1,6 @@
 import sys,time
 from gui import gui, nogui, screen, cache
 from gui.addon import with_play
-from gui.addon.control import stt
 from pypresence.exceptions import DiscordNotFound
 from setting import setting as user_setting
 import discord_rpc.client
