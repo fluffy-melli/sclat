@@ -1,31 +1,26 @@
-import chardet, cv2, time, re, os
+import chardet, cv2, time, re, os, numpy as np, threading
 
-#sys.stdout = open(os.devnull, 'w')
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+import pygame, pygame.scrap
 from pyvidplayer2 import Video
 from dataclasses import dataclass
 from typing import Optional
-import threading
-from gui import size, screen, cache
-from addon import ascii, subtitle, with_play
-from control import gesture, stt
-from download import download, subtitles
-from setting import setting as user_setting
-from sockets import setting as socket_setting
-from sockets import client, server
-from fft import fft
-import pygame, pygame.scrap
-import discord_rpc.client
+from gui import screen, cache
+from gui.addon import ascii, subtitle, with_play, fft
+from gui.addon.control import gesture, stt
 import gui.font
-import numpy as np
-
-audio_data = None
+from download import download, subtitles
+from sockets import client, server
+from sockets import setting as socket_setting
+from setting import setting as user_setting
+import discord_rpc.client
 
 # Global state
 @dataclass
 class VideoState:
     cap: Optional[cv2.VideoCapture] = None
     ascii_mode: bool = False
+    ascii_width: int = 190 
     font_size: int = 14
     font: Optional[pygame.font.Font] = None
     search: str = ""
@@ -34,7 +29,7 @@ class VideoState:
     fullscreen: bool = False
     display_width: int = 0
     display_height: int = 0
-    ascii_width: int = 190 
+    audio: Optional[np.ndarray] = None
     msg_start_time: float = 0
     msg_text: str = ""
 
@@ -87,13 +82,13 @@ def handle_key_event(key: str) -> None:
         case "l":
             cache.loop = not cache.loop
             state.msg_text = f"Loop: {'On' if cache.loop else 'Off'}"
-        case ["up", "down"]:
+        case "up" | "down":
             volume_delta = 10 if key == "up" else -10
             if 0 <= user_setting.volume + volume_delta <= 100:
                 user_setting.change_setting_data('volume',user_setting.volume + volume_delta)
                 screen.vid.set_volume(user_setting.volume/100)
                 state.msg_text = f"Volume: {user_setting.volume}%"
-        case ["right", "left"]:
+        case "right" | "left":
             seek_amount = 15 if key == "right" else -15
             screen.vid.seek(seek_amount)
             state.msg_text = f"Seek: {seek_amount:+d}s"
@@ -113,31 +108,6 @@ def handle_key_event(key: str) -> None:
     if state.msg_text:
         state.msg_start_time = time.time()
 
-def draw_overlay(current_time: float):
-    """Draws the overlay text on the video screen"""
-    if time.time() - state.msg_start_time <= cache.MESSAGE_DISPLAY_TIME and state.msg_text:
-        text_surface = screen.font.render(state.msg_text, True, (255,255,255))
-        text_rect = text_surface.get_rect(topleft=(10, 10))
-        #screen.win.blit(text_surface, text_rect)
-        padding = 2
-        rect_width = text_rect.width + padding * 2
-        rect_height = text_rect.height + padding * 2
-        rect_x = text_rect.x - padding
-        rect_y = text_rect.y - padding
-        rectangle_surface = pygame.Surface((rect_width, rect_height))
-        rectangle_surface.fill((0, 0, 0))
-        rectangle_surface.set_alpha(128)
-        screen.win.blit(rectangle_surface, (rect_x, rect_y))
-        screen.win.blit(text_surface, text_rect)
-
-    total_length = screen.vid.duration
-    window_width = screen.win.get_size()[0]
-    window_height = screen.win.get_size()[1]
-    
-    pygame.draw.rect(screen.win, (100, 100, 100), 
-                    (0, window_height - 5, window_width, 5))
-    pygame.draw.rect(screen.win, (255, 0, 0), 
-                    (0, window_height - 5, (current_time / total_length) * window_width, 5))
 
 def try_play_video(url: str, max_retries: int = 10) -> None:
     """Attempts to play a video from the given URL, retrying up to a specified number of times if an exception occurs."""
@@ -152,22 +122,12 @@ def try_play_video(url: str, max_retries: int = 10) -> None:
             print(f"Retry {retry + 1}/{max_retries}: {str(e)}")
             time.sleep(0.5)
 
-def FFT():
-    audio_index = int(screen.vid.get_pos() / screen.vid.duration * len(audio_data))
-    if audio_index + fft.buffer_size < len(audio_data):
-        audio_chunk = audio_data[audio_index:audio_index + fft.buffer_size]
-    else:
-        audio_chunk = audio_data[audio_index:]
-    fft_data = np.fft.fft(audio_chunk)
-    audio_index += fft.buffer_size
-    if audio_index >= len(audio_data):
-        audio_index = 0
-    fft.plot_spectrum(fft_data, audio_chunk)
 
 def run(url: str, seek = 0):
-    global audio_data
+    global state
     os.environ['SDL_VIDEO_CENTERED'] = '1'
     fns, fn, vtt = download.install(url)
+
     sub = None
     if vtt:
         try:
@@ -175,24 +135,26 @@ def run(url: str, seek = 0):
         except Exception as e:
             sub = None
             vtt = None
+
     screen.vid = Video(fn)
     screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5 + 5), vid=True)
     pygame.display.set_caption(screen.vid.name)
     screen.vid.set_volume(user_setting.volume / 100)
     screen.vid.seek(seek)
-    audio_data = fft.extract_audio_from_video(fn)
-    global state
+
+    state.audio = fft.extract_audio_from_video(fn)
     state.font = pygame.font.SysFont("Courier", state.font_size)
     state.cap = cv2.VideoCapture(fn)
     state.msg_start_time = 0 
     state.msg_text = "" 
+
     if user_setting.stt:
-        thread = threading.Thread(target=stt.run, args=(screen.vid,), daemon=True)
-        thread.start()
+        threading.Thread(target=stt.run, args=(screen.vid,), daemon=True).start()
     if with_play.server:
         server.seek = 0
         server.playurl = url
         #server.broadcast_message({"type":"play-info","playurl": url,"seek": 0})
+
     while screen.vid.active:
         key = None
         for event in pygame.event.get():
@@ -209,67 +171,56 @@ def run(url: str, seek = 0):
             frame_number = int(current_time * fps)
             state.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
             ret, frame = state.cap.read()
-            if total_length - current_time <= 0.1:
-                if cache.loop:
-                    screen.vid.restart()
+
+            if total_length - current_time <= 0.1 and cache.loop:
+                screen.vid.restart()
+
             if not ret:
                 break
-            #if user_setting.Gesture:
-            #    gesture.run(screen.vid)
-            if state.ascii_mode and state.cap:
-                if ret:
-                    screen.vid.draw(screen.win, (0, 0))
-                    ascii_frame = ascii.frame(frame, width=state.ascii_width)
-                    screen.win.fill((0, 0, 0))
-                    for i, (line_chars, line_colors) in enumerate(ascii_frame):
-                        x = 0
-                        for char, color in zip(line_chars, line_colors):
-                            color = (color[2], color[1], color[0])
-                            text_surface = state.font.render(char, False, color)
-                            screen.win.blit(text_surface, (x, i * state.font_size))
-                            x += state.font_size * 0.6
-                    draw_overlay(current_time)
-                    if with_play.server:
-                        server.seek = current_time
-                    pygame.display.set_caption(f"[{current_time:.2f}s / {total_length:.2f}s] {screen.vid.name}")
+
+            if user_setting.Gesture:
+               gesture.run(screen.vid)
+
+            if state.ascii_mode:
+                ascii.render(frame, current_time, total_length, state)
             else:
-                screen.vid.draw(screen.win, (0, 0))
-                frame = size.sizeup(frame, pygame.display.get_window_size())
-                frame_surface = pygame.surfarray.make_surface(frame)
-                screen.win.blit(frame_surface, (0, 0))
-                draw_overlay(current_time)
-                if with_play.server:
-                    server.seek = current_time
-                pygame.display.set_caption(f"[{current_time:.2f}s / {total_length:.2f}s] {screen.vid.name}")
+                screen.render(frame, current_time, total_length, state)
         if sub:
             subtitle.render(sub)
         if user_setting.FFT:
-            FFT()
+            fft.run(state.audio)
+
         pygame.display.update()
         pygame.time.wait(16)
+
+    # * Clean up
     if state.cap:
         state.cap.release()
         state.cap = None
+
     screen.vid.close()
     if user_setting.stt:
         stt.stop()
     if user_setting.Gesture and user_setting.Gesture_show:
         gesture.close()
-    os.environ['SDL_VIDEO_CENTERED'] = '1'
-    if cache.video_list and len(cache.video_list) > 0:
+        
+    if cache.video_list:
         try:
-            cache.video_list.remove(cache.video_list[0])
+            cache.video_list.pop(0)
         except IndexError:
             cache.video_list = []
+
     if state.fullscreen:
         screen.reset((state.display_width,state.display_height))
-    if len(cache.video_list) == 0:
+    if not cache.video_list:
         screen.reset((state.search_width, state.search_height))
+    
     download.clear(fns)
+    os.environ['SDL_VIDEO_CENTERED'] = '1'
     pygame.display.update()
     pygame.display.set_caption("Sclat Video Player")
-    if user_setting.discord_RPC:
-        discord_rpc.client.update(time.time())
+    discord_rpc.client.default()
+
 
 def wait(once):
     global state
@@ -279,26 +230,33 @@ def wait(once):
     state.search_width = state.display_width // 2
     state.search_height = int(state.search_width * (9 / 16))
     os.environ['SDL_VIDEO_CENTERED'] = '1'
+
+    # * Setup display
     if state.fullscreen:
         screen.reset((state.display_width,state.display_height))
     elif screen.vid is None:
         screen.reset((state.search_width, state.search_height))
     else:
         screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5 + 5), vid=True)
+    
+    # * Initialize screen
     pygame.scrap.init()
     icon = pygame.image.load("./asset/sclatIcon.png")
     pygame.display.set_icon(icon)
     pygame.display.set_caption("Sclat Video Player")
     pygame.key.set_text_input_rect(pygame.Rect(0, 0, 0, 0))
-    if user_setting.discord_RPC:
-        discord_rpc.client.update(time.time())
+
+    discord_rpc.client.default()
     if with_play.server:
         server.seek = 0
         server.playurl = ''
         #server.broadcast_message({"type":"play-wait"})
+
     last_playinfo_time = time.time()
+
     if socket_setting.last_server != "":
         with_play.c_server_ip = socket_setting.last_server
+
     while True:
         screen.win.fill((0, 0, 0))
         if with_play.client:

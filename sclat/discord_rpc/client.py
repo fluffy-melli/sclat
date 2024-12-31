@@ -1,4 +1,6 @@
 from pypresence import Presence
+from setting import setting as user_setting
+import time
 
 RPC = Presence(1308354144490360943)
 def update(start_time, name="Picking a Video", url="", channel="Still choosing..."):
@@ -20,3 +22,7 @@ def update(start_time, name="Picking a Video", url="", channel="Still choosing..
         update_params.pop("buttons")
         
     RPC.update(**update_params)
+
+def default():
+    if user_setting.discord_RPC:
+        update(time.time())

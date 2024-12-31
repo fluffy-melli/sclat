@@ -51,5 +51,4 @@ def start_server():
     while True:
         client_socket, client_address = server.accept()
         clients.append(client_socket)
-        client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address, clients))
-        client_thread.start()
+        threading.Thread(target=handle_client, args=(client_socket, client_address, clients), daemon=True).start()

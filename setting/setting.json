@@ -3,7 +3,7 @@
     "discord_RPC": true,
     "Gesture-Control": false,
     "Gesture-Control-Screen": false,
-    "STT-Contorl": true,
+    "STT-Control": false,
     "volume": 10,
     "file-save-dir": "./asset/storage",
     "Subtitle-Lang": "ko"

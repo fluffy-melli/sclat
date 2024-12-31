@@ -1,5 +1,7 @@
 import cv2, os
 from gui import screen, cache
+from gui.addon import with_play
+from sockets import server
 import pygame
 
 def frame(frame, width=100):
@@ -49,3 +51,19 @@ def toggle(state):
     else:
         screen.reset((screen.vid.current_size[0]*1.5, screen.vid.current_size[1]*1.5+5), vid=True)
     os.environ['SDL_VIDEO_CENTERED'] = '1'
+
+def render(vidframe, current_time: float, total_length, state):
+    screen.vid.draw(screen.win, (0, 0))
+    ascii_frame = frame(vidframe, width=state.ascii_width)
+    screen.win.fill((0, 0, 0))
+    for i, (line_chars, line_colors) in enumerate(ascii_frame):
+        x = 0
+        for char, color in zip(line_chars, line_colors):
+            color = (color[2], color[1], color[0])
+            text_surface = state.font.render(char, False, color)
+            screen.win.blit(text_surface, (x, i * state.font_size))
+            x += state.font_size * 0.6
+    screen.draw_overlay(current_time, state)
+    if with_play.server:
+        server.seek = current_time
+    pygame.display.set_caption(f"[{current_time:.2f}s / {total_length:.2f}s] {screen.vid.name}")

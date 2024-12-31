@@ -1,3 +1,4 @@
+# This STT feature is currently unfinished and not available for normal use, so please wait for the next release.
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 from setting import setting as user_setting
@@ -19,6 +20,8 @@ def run(vid):
                 result = recognizer_instance.recognize_whisper(
                     audio_data, model="tiny", language="ko"
                 )
+                # TODO: Add a command that can be executed when the user speaks
+                print(result)
 
             except sr.UnknownValueError:
                 pass
