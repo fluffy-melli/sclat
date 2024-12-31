@@ -2,23 +2,24 @@ import math, cv2, sys, numpy as np, mediapipe as mp
 from setting import setting as user_setting
 import locale
 
-cap = cv2.VideoCapture(0)
+if user_setting.Gesture:
+    cap = cv2.VideoCapture(0)
 
-if not cap.isOpened():
-    system_lang = locale.getdefaultlocale()[0]
-    if system_lang and system_lang.startswith('ko'):
-        error_msg = "제스쳐 인식을 위한 카메라를 찾을 수 없습니다.\n카메라를 연결한 후 다시 시도해주세요."
-    else:
-        error_msg = "Cannot find camera for gesture recognition.\nPlease connect a camera and try again."
-    print(error_msg)
-    sys.exit(1)
+    if not cap.isOpened():
+        system_lang = locale.getdefaultlocale()[0]
+        if system_lang and system_lang.startswith('ko'):
+            error_msg = "제스쳐 인식을 위한 카메라를 찾을 수 없습니다.\n카메라를 연결한 후 다시 시도해주세요."
+        else:
+            error_msg = "Cannot find camera for gesture recognition.\nPlease connect a camera and try again."
+        print(error_msg)
+        sys.exit(1)
 
-hands = mp.solutions.hands.Hands(max_num_hands=1)
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
+    hands = mp.solutions.hands.Hands(max_num_hands=1)
+    mp_drawing = mp.solutions.drawing_utils
+    mp_drawing_styles = mp.solutions.drawing_styles
 
-w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-pause = False
+    w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    pause = False
 
 def distance(p1, p2):
     return math.dist((p1.x, p1.y), (p2.x, p2.y))

@@ -1,4 +1,4 @@
-from gui import with_play
+from gui.addon import with_play
 import socket, json, time
 
 client = None
