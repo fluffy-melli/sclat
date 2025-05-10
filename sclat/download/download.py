@@ -1,4 +1,4 @@
-import os,pygame,shutil,yt_dlp,time
+import os,pygame,shutil,yt_dlp,time,re
 from pytubefix import YouTube,Search
 from pytubefix.cli import on_progress
 ####################################
@@ -72,26 +72,25 @@ def search_infos(videos):
 def video_info(url:str):
     return YouTube(url).streaming_data
 
+def name(name:str):
+    name = name.replace("\\", "")
+    return name.replace("/", "")
+
 def install(url:str):
     os.makedirs(setting.file_save_dir, exist_ok=True)
     yt = YouTube(url, on_progress_callback = progress_function, on_complete_callback=after)
     yt_url = yt.watch_url
     if setting.discord_RPC:
         discord_rpc.client.update(time.time(), yt.title, yt_url, yt.author)
-    fns = f"{setting.file_save_dir}/{yt.length}/"
-    os.makedirs(fns, exist_ok=True)
-    if not os.path.exists(fns):
-        os.makedirs(fns)
-    fn = f"{fns}/{yt.title}.mp4"
     yt = yt.streams.filter(progressive=True, file_extension='mp4').get_highest_resolution()
-    yt.download(filename=fn)
-    sr = install_srt(yt_url, fns, yt.title, setting.SubTitle)
-    return fns, fn, sr
+    yt.download(output_path=setting.file_save_dir, filename=f"{name(yt.title)}.mp4")
+    sr = install_srt(yt_url, setting.file_save_dir, name(yt.title), setting.SubTitle)
+    return setting.file_save_dir, os.path.join(setting.file_save_dir, f"{name(yt.title)}.mp4"), sr
 
 def install_nogui(url:str):
     os.makedirs(setting.file_save_dir, exist_ok=True)
     yt = YouTube(url, on_progress_callback=on_progress)
-    fn = f"{setting.file_save_dir}/{yt.title}"
+    fn = f"{setting.file_save_dir}\\{yt.title}"
     audio = yt.streams.filter(only_audio=True).first()
     audio.download(filename=fn+".mp3")
     return fn
@@ -103,7 +102,7 @@ def install_srt(url: str, fns: str, title: str, lang = 'ko'):
         'writesubtitles': True,
         'subtitleslangs': [lang],
         'writeautomaticsub': True,
-        'outtmpl': f'{fns}/{title}.%(ext)s',
+        'outtmpl': os.path.join(fns, f'{title}.%(ext)s'),
         'skip_download': True,
         'progress_hooks': [progress_hook],
         'verbose': False,
@@ -112,7 +111,7 @@ def install_srt(url: str, fns: str, title: str, lang = 'ko'):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
-        return f'{fns}/{title}.{lang}.vtt'
+        return os.path.join(fns, f'{title}.{lang}.vtt')
     except Exception as e:
         return None
 
@@ -121,4 +120,3 @@ def clear(folder_path):
         if os.path.isdir(folder_path):
             shutil.rmtree(folder_path)
     os.makedirs(folder_path, exist_ok=True)
-

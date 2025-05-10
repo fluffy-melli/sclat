@@ -4,7 +4,7 @@
     "Gesture-Control": false,
     "Gesture-Control-Screen": false,
     "STT-Control": false,
-    "volume": 10,
-    "file-save-dir": "./asset/storage",
+    "volume": 100,
+    "file-save-dir": ".\\asset\\storage",
     "Subtitle-Lang": "ko"
 }

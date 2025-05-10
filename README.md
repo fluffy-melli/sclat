@@ -22,7 +22,7 @@ ASCII 아트 기능이 포함된 Python 기반 YouTube 비디오 플레이어입
 -   chardet == 5.2.0
 -   pytubefix == 7.1rc2
 -   pyvidplayer2 == 0.9.24
--   yt_dlp == 2024.12.13
+-   yt_dlp >= 2024.12.13
 
 자세한 정보는 requirements.txt를 참고하세요.
 

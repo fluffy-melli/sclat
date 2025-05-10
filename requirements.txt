@@ -1,9 +1,9 @@
 pygame == 2.5.2
-yt_dlp == 2024.12.13
+yt_dlp >= 2024.12.13
 moviepy == 1.0.3
 chardet == 5.2.0
 requests == 2.32.3
-pytubefix == 7.1rc2
+pytubefix >= 7.1rc2
 pyvidplayer2 == 0.9.24
 opencv-python == 4.5.5.64
 pyinstaller == 6.6.0
